@@ -1,0 +1,456 @@
+# syntax=docker/dockerfile:1.4
+FROM nginx:alpine
+
+COPY <<'SPL_HTML_END' /usr/share/nginx/html/index.html
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f3d2a">
+<title>Sambra Premier League</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: scoreboard header band, tab strip, then one working panel per tab (overview / teams / payments / expenses) */
+:root{
+  --bg:#f3f5f1; --surface:#ffffff; --sunk:#e8ece5; --line:#d5dbd0;
+  --fg:#17221b; --muted:#5d6b61;
+  --accent:#145a3c; --accent-ink:#ffffff; --gold:#b9770e;
+  --good:#1d7a46; --good-bg:#dff1e5; --warn:#9a5b00; --warn-bg:#fbecd2; --bad:#b3261e; --bad-bg:#f9dedb;
+  --band:#0f3d2a; --band-fg:#eef5ef; --band-muted:#a9c4b2;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1512; --surface:#16201a; --sunk:#1c2820; --line:#2a3a30;
+  --fg:#e5ede7; --muted:#93a598;
+  --accent:#4cc28a; --accent-ink:#06170e; --gold:#e3a540;
+  --good:#5fd394; --good-bg:#173323; --warn:#f0b357; --warn-bg:#352812; --bad:#f2847b; --bad-bg:#3a1a17;
+  --band:#0a2a1c; --band-fg:#e5f2e9; --band-muted:#8fb39c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1512; --surface:#16201a; --sunk:#1c2820; --line:#2a3a30;
+  --fg:#e5ede7; --muted:#93a598;
+  --accent:#4cc28a; --accent-ink:#06170e; --gold:#e3a540;
+  --good:#5fd394; --good-bg:#173323; --warn:#f0b357; --warn-bg:#352812; --bad:#f2847b; --bad-bg:#3a1a17;
+  --band:#0a2a1c; --band-fg:#e5f2e9; --band-muted:#8fb39c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--band)}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.num{font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* header band */
+.band{background:var(--band);color:var(--band-fg)}
+.band .wrap{padding-block:22px 0}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:13px;color:var(--band-muted)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(30px,6vw,46px);line-height:1;margin:4px 0 0;letter-spacing:.01em;text-wrap:balance}
+h1 span{color:var(--gold)}
+.tabs{display:flex;gap:4px;margin-top:18px;overflow-x:auto;scrollbar-width:none}
+.tab{background:none;border:0;padding:10px 14px;font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--band-muted);border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap}
+.tab[aria-selected="true"]{background:var(--bg);color:var(--fg)}
+.tab:hover:not([aria-selected="true"]){color:var(--band-fg)}
+
+main .wrap{padding-block:22px 48px;display:grid;gap:22px}
+.backup{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:12px 16px}
+label.btn{display:inline-block}
+.notice{padding:10px 14px;border-radius:8px;background:var(--warn-bg);color:var(--warn);font-weight:500}
+
+/* scoreboard tiles */
+.board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tile{background:var(--surface);padding:14px 16px;min-width:0}
+.tile .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.tile .val{font-family:var(--display);font-weight:700;font-size:28px;line-height:1.1;margin-top:4px}
+.tile .sub{font-size:12.5px;color:var(--muted)}
+.tile.hl{background:var(--band);color:var(--band-fg)} .tile.hl .lbl,.tile.hl .sub{color:var(--band-muted)} .tile.hl .val{color:var(--gold)}
+@media (max-width:820px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}.tile.hl{grid-column:1/-1}}
+
+h2{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.03em;text-transform:uppercase;margin:0}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.sec-head p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:4px 10px;font-size:13px}
+.btn.danger{color:var(--bad)}
+.btn.danger.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+tfoot td{font-weight:700;background:var(--sunk)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.tname{display:flex;align-items:center;gap:10px;font-weight:600}
+.swatch{width:12px;height:28px;border-radius:3px;flex:none;background:var(--muted)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.good{background:var(--good-bg);color:var(--good)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)}
+.meter{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;margin-top:6px;min-width:80px}
+.meter i{display:block;height:100%;background:var(--good)}
+.muted{color:var(--muted)} .sm{font-size:13px}
+
+/* team cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.card .top{padding:14px 16px 12px;border-top:6px solid var(--muted)}
+.card .no{font-family:var(--display);font-weight:700;color:var(--muted);font-size:13px;letter-spacing:.1em}
+.card h3{font-family:var(--display);font-size:24px;font-weight:700;margin:2px 0 8px;line-height:1.05}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
+.card .foot{margin-top:auto;padding:10px 16px;background:var(--sunk);display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+/* category bars */
+.cats{display:grid;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.cat{display:grid;grid-template-columns:110px 1fr auto;gap:12px;align-items:center;font-size:14px}
+.cat .bar{height:10px;background:var(--sunk);border-radius:5px;overflow:hidden}
+.cat .bar i{display:block;height:100%;background:var(--gold)}
+.two{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:22px}
+@media (max-width:820px){.two{grid-template-columns:1fr}}
+
+/* filters */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.filters select,.filters input{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+
+/* drawer form */
+.overlay{position:fixed;inset:0;background:rgba(8,20,13,.55);z-index:20;display:flex;justify-content:flex-end}
+.drawer{background:var(--bg);width:min(440px,100%);height:100%;overflow-y:auto;padding:calc(20px + env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) 20px;display:flex;flex-direction:column;gap:14px}
+.drawer h2{font-size:24px}
+.field{display:grid;gap:4px}
+.field label{font-size:12.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.field input,.field select,.field textarea{padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);width:100%}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.err{color:var(--bad);font-size:13.5px;min-height:1em}
+.drawer .actions{margin-top:6px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--band);color:var(--band-fg);padding:10px 16px;border-radius:8px;z-index:30;font-weight:500}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(30px);opacity:.6}}}
+</style>
+</head><body>
+
+<header class="band">
+  <div class="wrap">
+    <div class="eyebrow" id="season">Organiser's ledger · Season 2026</div>
+    <h1>Sambra <span>Premier League</span></h1>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+      <button class="tab" role="tab" data-tab="teams" aria-selected="false">Teams</button>
+      <button class="tab" role="tab" data-tab="payments" aria-selected="false">Payments</button>
+      <button class="tab" role="tab" data-tab="expenses" aria-selected="false">Organiser spend</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="notice" id="notice" hidden></div>
+    <section data-panel="overview" class="backup">
+      <div><b>Your records are saved on this phone, in this browser.</b><br><span class="muted sm" id="lastBackup">Take a backup after every match day so nothing is lost if browser data is cleared.</span></div>
+      <div class="actions"><button class="btn primary" id="btnBackup">Save backup</button><label class="btn" for="restoreFile">Restore backup</label><input type="file" id="restoreFile" accept=".json,application/json" hidden></div>
+    </section>
+
+    <!-- OVERVIEW -->
+    <section data-panel="overview">
+      <div class="board" id="board"></div>
+    </section>
+    <section data-panel="overview" class="two">
+      <div>
+        <div class="sec-head"><div><h2>Team dues</h2><p>Entry fee against money received from each owner</p></div></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Team</th><th>Owner</th><th>Icon player</th><th class="r">Fee</th><th class="r">Paid</th><th class="r">Due</th><th>Status</th></tr></thead>
+          <tbody id="dueBody"></tbody>
+        </table></div>
+      </div>
+      <div>
+        <div class="sec-head"><div><h2>Where money went</h2><p>Organiser spend by category</p></div></div>
+        <div class="cats" id="cats"></div>
+      </div>
+    </section>
+
+    <!-- TEAMS -->
+    <section data-panel="teams" hidden>
+      <div class="sec-head">
+        <div><h2>Teams</h2><p>Owner, icon player and agreed fee for each franchise</p></div>
+        <div class="actions"><button class="btn" id="btnLeague">League settings</button><button class="btn primary w" id="btnAddTeam">Add team</button></div>
+      </div>
+      <div class="cards" id="teamCards"></div>
+    </section>
+
+    <!-- PAYMENTS -->
+    <section data-panel="payments" hidden>
+      <div class="sec-head">
+        <div><h2>Payments received</h2><p>Every rupee collected from team owners</p></div>
+        <div class="actions"><button class="btn dl" data-dl="payments">Download CSV</button><button class="btn primary w" id="btnAddPay">Record payment</button></div>
+      </div>
+      <div class="filters"><select id="payFilter" aria-label="Filter by team"><option value="">All teams</option></select></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Team</th><th>Received from</th><th>Mode</th><th>Note</th><th class="r">Amount</th><th></th></tr></thead>
+        <tbody id="payBody"></tbody><tfoot id="payFoot"></tfoot>
+      </table></div>
+    </section>
+
+    <!-- EXPENSES -->
+    <section data-panel="expenses" hidden>
+      <div class="sec-head">
+        <div><h2>Organiser spend</h2><p>Ground, balls, trophies, umpires and everything else paid out</p></div>
+        <div class="actions"><button class="btn dl" data-dl="expenses">Download CSV</button><button class="btn primary w" id="btnAddExp">Add expense</button></div>
+      </div>
+      <div class="filters"><select id="expFilter" aria-label="Filter by category"><option value="">All categories</option></select></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Item</th><th>Category</th><th>Paid by</th><th>Mode</th><th class="r">Amount</th><th></th></tr></thead>
+        <tbody id="expBody"></tbody><tfoot id="expFoot"></tfoot>
+      </table></div>
+    </section>
+  </div>
+</main>
+
+<div class="overlay" id="overlay" hidden><form class="drawer" id="drawer" novalidate></form></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const CATS=["Ground","Balls","Trophies & prizes","Umpire & scorer","Food & water","Kit & jerseys","Printing & banners","Other"];
+const MODES=["Cash","UPI","Bank transfer","Cheque"];
+const COLORS=["#c0392b","#1f6fb2","#d4a017","#7b3fa0","#1d8a5b","#e2711d","#2c3e50","#d6337c"];
+const S={teams:[],payments:[],expenses:[],config:{name:"Sambra Premier League",season:"2026",entryFee:0},loaded:false};
+const KEY="spl-ledger-v1";
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function persist(){try{localStorage.setItem(KEY,JSON.stringify({teams:S.teams,payments:S.payments,expenses:S.expenses,config:S.config,lastBackup:S.lastBackup||null}));return true}catch(e){notice("This browser is not letting the page save. Turn off private/incognito mode and try again.");return false}}
+function upsert(kind,id,body){const list=S[kind];if(id){const i=list.findIndex(x=>x.id===id);if(i>=0)list[i]={id,...body};else list.push({id,...body})}else list.push({id:uid(),...body});persist();render()}
+function removeRec(kind,id){S[kind]=S[kind].filter(x=>x.id!==id);persist();render()}
+
+const inr=new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0});
+const money=n=>inr.format(Number(n)||0);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const fmtDate=s=>{if(!s)return"";const d=new Date(s+"T00:00");return isNaN(d)?esc(s):d.toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})};
+const $=id=>document.getElementById(id);
+const teamById=id=>S.teams.find(t=>t.id===id);
+const feeOf=t=>Number(t.fee)>0?Number(t.fee):Number(S.config.entryFee)||0;
+const paidBy=id=>S.payments.filter(p=>p.teamId===id).reduce((a,p)=>a+(Number(p.amount)||0),0);
+
+/* ---------- tabs ---------- */
+function showTab(name){
+  if(!["overview","teams","payments","expenses"].includes(name))name="overview";
+  document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===name));
+  document.querySelectorAll("[data-panel]").forEach(p=>p.hidden=p.dataset.panel!==name);
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
+showTab((location.hash||"").slice(1));
+
+/* ---------- render ---------- */
+function render(){
+  $("season").textContent=`Organiser's ledger · Season ${S.config.season||""}`;
+  const teams=[...S.teams].sort((a,b)=>(a.order??99)-(b.order??99)||String(a.name).localeCompare(b.name));
+  const expected=teams.reduce((a,t)=>a+feeOf(t),0);
+  const collected=S.payments.reduce((a,p)=>a+(Number(p.amount)||0),0);
+  const spent=S.expenses.reduce((a,e)=>a+(Number(e.amount)||0),0);
+  const pending=teams.reduce((a,t)=>a+Math.max(0,feeOf(t)-paidBy(t.id)),0);
+  const fullyPaid=teams.filter(t=>feeOf(t)>0&&paidBy(t.id)>=feeOf(t)).length;
+  $("board").innerHTML=[
+    ["Expected from teams",money(expected),`${teams.length} teams`],
+    ["Collected",money(collected),`${S.payments.length} payments`],
+    ["Still due",money(pending),`${fullyPaid} of ${teams.length} teams fully paid`],
+    ["Organiser spent",money(spent),`${S.expenses.length} expenses`],
+    ["Cash in hand",money(collected-spent),"Collected minus spent","hl"],
+  ].map(([l,v,s,c])=>`<div class="tile ${c||""}"><div class="lbl">${l}</div><div class="val num">${v}</div><div class="sub">${s}</div></div>`).join("");
+
+  // dues table
+  $("dueBody").innerHTML=teams.length?teams.map(t=>{
+    const fee=feeOf(t),paid=paidBy(t.id),due=Math.max(0,fee-paid),pct=fee?Math.min(100,paid/fee*100):0;
+    const st=!fee?`<span class="pill warn">Set fee</span>`:due===0?`<span class="pill good">Paid</span>`:paid>0?`<span class="pill warn">Part paid</span>`:`<span class="pill bad">Not paid</span>`;
+    return `<tr><td><div class="tname"><span class="swatch" style="background:${esc(t.color||"")}"></span>${esc(t.name)}</div></td>
+      <td>${esc(t.owner)||'<span class="muted">—</span>'}</td><td>${esc(t.icon)||'<span class="muted">—</span>'}</td>
+      <td class="r num">${money(fee)}</td><td class="r num">${money(paid)}<div class="meter"><i style="width:${pct}%"></i></div></td>
+      <td class="r num">${money(due)}</td><td>${st}</td></tr>`}).join("")
+    :`<tr><td colspan="7" class="empty">${S.loaded?"No teams yet. Open the Teams tab and add your 8 teams.":"Loading league records…"}</td></tr>`;
+
+  // categories
+  const byCat={};S.expenses.forEach(e=>{const c=e.category||"Other";byCat[c]=(byCat[c]||0)+(Number(e.amount)||0)});
+  const catRows=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const max=Math.max(1,...catRows.map(r=>r[1]));
+  $("cats").innerHTML=catRows.length?catRows.map(([c,v])=>`<div class="cat"><span>${esc(c)}</span><div class="bar"><i style="width:${v/max*100}%"></i></div><span class="num">${money(v)}</span></div>`).join("")
+    :`<div class="empty">No organiser expenses yet. Add them under Organiser spend.</div>`;
+
+  // team cards
+  $("teamCards").innerHTML=teams.length?teams.map((t,i)=>{
+    const fee=feeOf(t),paid=paidBy(t.id),due=Math.max(0,fee-paid);
+    return `<article class="card"><div class="top" style="border-top-color:${esc(t.color||"")}">
+      <div class="no">TEAM ${i+1}</div><h3>${esc(t.name)}</h3>
+      <dl class="kv"><dt>Owner</dt><dd>${esc(t.owner)||"—"}</dd><dt>Phone</dt><dd class="num">${esc(t.phone)||"—"}</dd>
+      <dt>Icon player</dt><dd>${esc(t.icon)||"—"}${Number(t.iconAmount)?` <span class="muted sm num">(${money(t.iconAmount)})</span>`:""}</dd>
+      <dt>Captain</dt><dd>${esc(t.captain)||"—"}</dd><dt>Entry fee</dt><dd class="num">${money(fee)}${Number(t.fee)>0?"":' <span class="muted sm">(league default)</span>'}</dd>
+      ${t.notes?`<dt>Notes</dt><dd>${esc(t.notes)}</dd>`:""}</dl></div>
+      <div class="foot"><span class="num sm">${due===0&&fee?'<span class="pill good">Paid in full</span>':`Due <b>${money(due)}</b>`}</span>
+      <span class="actions"><button class="btn small w" data-edit-team="${esc(t.id)}">Edit</button><button class="btn small w" data-pay-team="${esc(t.id)}">+ Payment</button></span></div></article>`}).join("")
+    :`<div class="empty">${S.loaded?"No teams yet. Use “Add team” to create each franchise.":"Loading…"}</div>`;
+
+  // filters
+  const pf=$("payFilter"),pv=pf.value;
+  pf.innerHTML=`<option value="">All teams</option>`+teams.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");pf.value=pv;
+  const ef=$("expFilter"),ev=ef.value;
+  ef.innerHTML=`<option value="">All categories</option>`+CATS.map(c=>`<option>${esc(c)}</option>`).join("");ef.value=ev;
+
+  // payments
+  const pays=S.payments.filter(p=>!pf.value||p.teamId===pf.value).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  $("payBody").innerHTML=pays.length?pays.map(p=>{const t=teamById(p.teamId);return `<tr><td class="num">${fmtDate(p.date)}</td>
+    <td><div class="tname"><span class="swatch" style="background:${esc(t?.color||"")};height:18px;width:8px"></span>${esc(t?.name||"Deleted team")}</div></td>
+    <td>${esc(p.from)}</td><td>${esc(p.mode)}</td><td class="muted">${esc(p.note)}</td><td class="r num"><b>${money(p.amount)}</b></td>
+    <td class="r"><span class="actions" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn small w" data-edit-pay="${esc(p.id)}">Edit</button><button class="btn small danger w" data-del="payments/${esc(p.id)}">Delete</button></span></td></tr>`}).join("")
+    :`<tr><td colspan="7" class="empty">No payments recorded yet. Use “Record payment” when an owner pays.</td></tr>`;
+  $("payFoot").innerHTML=pays.length?`<tr><td colspan="5">Total${pf.value?" for this team":""}</td><td class="r num">${money(pays.reduce((a,p)=>a+(Number(p.amount)||0),0))}</td><td></td></tr>`:"";
+
+  // expenses
+  const exps=S.expenses.filter(e=>!ef.value||e.category===ef.value).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  $("expBody").innerHTML=exps.length?exps.map(e=>`<tr><td class="num">${fmtDate(e.date)}</td><td><b>${esc(e.item)}</b>${e.note?`<div class="muted sm">${esc(e.note)}</div>`:""}</td>
+    <td>${esc(e.category)}</td><td>${esc(e.paidBy)}</td><td>${esc(e.mode)}</td><td class="r num"><b>${money(e.amount)}</b></td>
+    <td class="r"><span class="actions" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn small w" data-edit-exp="${esc(e.id)}">Edit</button><button class="btn small danger w" data-del="expenses/${esc(e.id)}">Delete</button></span></td></tr>`).join("")
+    :`<tr><td colspan="7" class="empty">No expenses yet. Add ground booking, balls, trophies and other costs here.</td></tr>`;
+  $("expFoot").innerHTML=exps.length?`<tr><td colspan="5">Total${ef.value?" for "+esc(ef.value):""}</td><td class="r num">${money(exps.reduce((a,e)=>a+(Number(e.amount)||0),0))}</td><td></td></tr>`:"";
+
+  $("lastBackup").textContent=S.lastBackup?"Last backup: "+new Date(S.lastBackup).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})+". Take a new one after every match day.":"No backup yet. Tap “Save backup” after every match day so nothing is lost if browser data is cleared.";
+}
+$("payFilter").addEventListener("change",render);$("expFilter").addEventListener("change",render);
+
+/* ---------- drawer forms ---------- */
+const drawer=$("drawer"),overlay=$("overlay");
+function field(id,label,type="text",val="",extra=""){
+  if(type==="select")return `<div class="field"><label for="${id}">${label}</label><select id="${id}">${extra}</select></div>`;
+  if(type==="textarea")return `<div class="field"><label for="${id}">${label}</label><textarea id="${id}" rows="2">${esc(val)}</textarea></div>`;
+  return `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" value="${esc(val)}" ${extra}></div>`;
+}
+const opts=(list,sel)=>list.map(o=>{const [v,l]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}"${v===sel?" selected":""}>${esc(l)}</option>`}).join("");
+function openDrawer(title,html,onSave,onDelete){
+  drawer.innerHTML=`<h2>${esc(title)}</h2>${html}<div class="err" id="ferr"></div>
+    <div class="actions"><button type="submit" class="btn primary">Save</button><button type="button" class="btn" id="fcancel">Cancel</button>
+    ${onDelete?'<button type="button" class="btn danger" id="fdel" style="margin-left:auto">Delete</button>':""}</div>`;
+  overlay.hidden=false;
+  const first=drawer.querySelector("input,select");first&&first.focus();
+  $("fcancel").onclick=closeDrawer;
+  if(onDelete)armDelete($("fdel"),async()=>{await onDelete();closeDrawer()});
+  drawer.onsubmit=async ev=>{ev.preventDefault();$("ferr").textContent="";
+    const btn=drawer.querySelector("[type=submit]");btn.disabled=true;
+    try{const msg=await onSave();if(msg){$("ferr").textContent=msg;btn.disabled=false;return}closeDrawer();toast("Saved")}
+    catch(e){$("ferr").textContent=errText(e);btn.disabled=false}};
+}
+function closeDrawer(){overlay.hidden=true;drawer.innerHTML=""}
+overlay.addEventListener("click",e=>{if(e.target===overlay)closeDrawer()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!overlay.hidden)closeDrawer()});
+const v=id=>$(id).value.trim();
+const amt=id=>{const n=Number(String($(id).value).replace(/[,₹\s]/g,""));return isFinite(n)?n:NaN};
+
+function teamForm(t){
+  const isNew=!t;t=t||{color:COLORS[S.teams.length%COLORS.length]};
+  openDrawer(isNew?"Add team":"Edit team",
+    field("t_name","Team name","text",t.name,'placeholder="e.g. Sambra Strikers"')+
+    `<div class="row2">${field("t_owner","Owner name","text",t.owner)}${field("t_phone","Owner phone","tel",t.phone)}</div>`+
+    `<div class="row2">${field("t_icon","Icon player","text",t.icon)}${field("t_iconAmt","Icon player amount (₹)","number",t.iconAmount||"",'min="0" inputmode="numeric"')}</div>`+
+    field("t_captain","Captain","text",t.captain)+
+    `<div class="row2">${field("t_fee","Entry fee (₹)","number",t.fee||"",`min="0" inputmode="numeric" placeholder="${S.config.entryFee?"Default "+S.config.entryFee:""}"`)}${field("t_color","Team colour","color",t.color||"#1f6fb2")}</div>`+
+    field("t_notes","Notes","textarea",t.notes),
+    async()=>{const name=v("t_name");if(!name)return"Enter a team name.";
+      const fee=v("t_fee")===""?0:amt("t_fee"),ia=v("t_iconAmt")===""?0:amt("t_iconAmt");
+      if(isNaN(fee)||fee<0||isNaN(ia)||ia<0)return"Amounts must be numbers of 0 or more.";
+      const body={name,owner:v("t_owner"),phone:v("t_phone"),icon:v("t_icon"),iconAmount:ia,captain:v("t_captain"),fee,color:$("t_color").value,notes:v("t_notes"),
+        order:isNew?(Math.max(0,...S.teams.map(x=>x.order||0))+1):(t.order??99),updatedAt:new Date().toISOString()};
+      upsert("teams",isNew?null:t.id,body)},
+    isNew?null:async()=>{if(paidBy(t.id)>0){toast("Delete this team's payments first");throw 0}removeRec("teams",t.id);toast("Team deleted")});
+}
+function payForm(p,teamId){
+  const isNew=!p;p=p||{teamId:teamId||"",date:today(),mode:"Cash"};
+  const tsorted=[...S.teams].sort((a,b)=>(a.order??99)-(b.order??99));
+  if(!tsorted.length){toast("Add a team first");return}
+  const t0=teamById(p.teamId);
+  openDrawer(isNew?"Record payment":"Edit payment",
+    field("p_team","Team","select","",opts(tsorted.map(t=>[t.id,t.name]),p.teamId||tsorted[0].id))+
+    `<div class="row2">${field("p_amount","Amount (₹)","number",p.amount||"",'min="1" inputmode="numeric"')}${field("p_date","Date","date",p.date)}</div>`+
+    `<div class="row2">${field("p_from","Received from","text",p.from??(t0?.owner||""))}${field("p_mode","Mode","select","",opts(MODES,p.mode))}</div>`+
+    field("p_note","Note","text",p.note,'placeholder="e.g. 1st instalment, UPI ref"'),
+    async()=>{const a=amt("p_amount");if(!(a>0))return"Enter the amount received.";if(!v("p_date"))return"Pick the date.";
+      const body={teamId:$("p_team").value,amount:a,date:v("p_date"),from:v("p_from"),mode:$("p_mode").value,note:v("p_note"),updatedAt:new Date().toISOString()};
+      upsert("payments",isNew?null:p.id,body)},
+    isNew?null:async()=>{removeRec("payments",p.id);toast("Payment deleted")});
+  if(isNew)$("p_team").addEventListener("change",()=>{if(!$("p_from").dataset.touched)$("p_from").value=teamById($("p_team").value)?.owner||""});
+  if(isNew)$("p_from").addEventListener("input",()=>$("p_from").dataset.touched=1);
+}
+function expForm(e){
+  const isNew=!e;e=e||{date:today(),category:CATS[0],mode:"Cash"};
+  openDrawer(isNew?"Add expense":"Edit expense",
+    field("e_item","What was it for","text",e.item,'placeholder="e.g. Ground booking – Day 1"')+
+    `<div class="row2">${field("e_amount","Amount (₹)","number",e.amount||"",'min="1" inputmode="numeric"')}${field("e_date","Date","date",e.date)}</div>`+
+    `<div class="row2">${field("e_cat","Category","select","",opts(CATS,e.category))}${field("e_mode","Mode","select","",opts(MODES,e.mode))}</div>`+
+    field("e_by","Paid by (organiser)","text",e.paidBy)+field("e_note","Note","text",e.note),
+    async()=>{const a=amt("e_amount");if(!v("e_item"))return"Say what the money was spent on.";if(!(a>0))return"Enter the amount spent.";if(!v("e_date"))return"Pick the date.";
+      const body={item:v("e_item"),amount:a,date:v("e_date"),category:$("e_cat").value,mode:$("e_mode").value,paidBy:v("e_by"),note:v("e_note"),updatedAt:new Date().toISOString()};
+      upsert("expenses",isNew?null:e.id,body)},
+    isNew?null:async()=>{removeRec("expenses",e.id);toast("Expense deleted")});
+}
+function leagueForm(){
+  const c=S.config;
+  openDrawer("League settings",
+    field("l_name","League name","text",c.name)+
+    `<div class="row2">${field("l_season","Season","text",c.season)}${field("l_fee","Default entry fee (₹)","number",c.entryFee||"",'min="0" inputmode="numeric"')}</div>`+
+    `<p class="muted sm" style="margin:0">The default fee applies to every team that has no fee of its own.</p>`,
+    async()=>{const f=v("l_fee")===""?0:amt("l_fee");if(isNaN(f)||f<0)return"Fee must be 0 or more.";
+      S.config={name:v("l_name")||"Sambra Premier League",season:v("l_season"),entryFee:f};persist();render()});
+}
+$("btnAddTeam").onclick=()=>teamForm();
+$("btnAddPay").onclick=()=>payForm();
+$("btnAddExp").onclick=()=>expForm();
+$("btnLeague").onclick=leagueForm;
+
+/* inline two-tap delete */
+function armDelete(btn,fn){
+  btn.addEventListener("click",async e=>{e.preventDefault();
+    if(!btn.classList.contains("armed")){btn.classList.add("armed");btn.dataset.label=btn.textContent;btn.textContent="Tap again to delete";
+      setTimeout(()=>{if(btn.isConnected&&btn.classList.contains("armed")){btn.classList.remove("armed");btn.textContent=btn.dataset.label}},3500);return}
+    btn.disabled=true;try{await fn()}catch(err){if(err)toast(errText(err));btn.disabled=false;btn.classList.remove("armed");btn.textContent=btn.dataset.label}});
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b||b.disabled)return;
+  if(b.dataset.editTeam)teamForm(teamById(b.dataset.editTeam));
+  else if(b.dataset.payTeam)payForm(null,b.dataset.payTeam);
+  else if(b.dataset.editPay)payForm(S.payments.find(p=>p.id===b.dataset.editPay));
+  else if(b.dataset.editExp)expForm(S.expenses.find(x=>x.id===b.dataset.editExp));
+  else if(b.dataset.del&&!b.dataset.wired){b.dataset.wired=1;armDelete(b,async()=>{const [k,id]=b.dataset.del.split("/");removeRec(k,id);toast("Deleted")});b.click()}
+  else if(b.dataset.dl)exportCsv(b.dataset.dl);
+});
+
+/* CSV export */
+async function exportCsv(kind){
+  const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
+  let rows;
+  if(kind==="payments")rows=[["Date","Team","Received from","Mode","Amount","Note"],...[...S.payments].sort((a,b)=>String(a.date).localeCompare(b.date)).map(p=>[p.date,teamById(p.teamId)?.name||"",p.from,p.mode,p.amount,p.note])];
+  else rows=[["Date","Item","Category","Paid by","Mode","Amount","Note"],...[...S.expenses].sort((a,b)=>String(a.date).localeCompare(b.date)).map(e=>[e.date,e.item,e.category,e.paidBy,e.mode,e.amount,e.note])];
+  saveFile(`SPL-${kind}-${today()}.csv`,"\ufeff"+rows.map(r=>r.map(q).join(",")).join("\n"),"text/csv")
+}
+
+/* misc */
+let tt;function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,2200)}
+function errText(e){return"Couldn't save. "+(e&&e.message?e.message:"Try again.")}
+function saveFile(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+$("btnBackup").onclick=()=>{S.lastBackup=new Date().toISOString();persist();render();
+  saveFile(`SPL-backup-${today()}.json`,JSON.stringify({app:"spl-ledger",version:1,savedAt:S.lastBackup,teams:S.teams,payments:S.payments,expenses:S.expenses,config:S.config},null,1),"application/json");toast("Backup file saved to Downloads")};
+$("restoreFile").onchange=async ev=>{const f=ev.target.files[0];ev.target.value="";if(!f)return;
+  try{const d=JSON.parse(await f.text());if(d.app!=="spl-ledger"||!Array.isArray(d.teams))throw 0;
+    S.teams=d.teams;S.payments=d.payments||[];S.expenses=d.expenses||[];S.config={...S.config,...(d.config||{})};persist();render();toast("Backup restored")}
+  catch(e){toast("That file isn't an SPL backup. Pick a file named SPL-backup-….json")}};
+function notice(m){const n=$("notice");n.textContent=m;n.hidden=!m}
+
+/* ---------- boot ---------- */
+(function(){let d=null;try{d=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){}
+  if(d){S.teams=d.teams||[];S.payments=d.payments||[];S.expenses=d.expenses||[];S.config={...S.config,...(d.config||{})};S.lastBackup=d.lastBackup||null}
+  else{S.teams=Array.from({length:8},(_,i)=>({id:"team"+(i+1),name:"Team "+(i+1),owner:"",phone:"",icon:"",iconAmount:0,captain:"",fee:0,color:COLORS[i],notes:"",order:i+1}));persist()}
+  S.loaded=true;render()})();
+</script>
+</body></html>
+
+SPL_HTML_END
+
+# Also serve the same app at /2026/
+RUN mkdir -p /usr/share/nginx/html/2026 && cp /usr/share/nginx/html/index.html /usr/share/nginx/html/2026/index.html
+
+EXPOSE 80
